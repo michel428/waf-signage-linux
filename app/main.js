@@ -13,7 +13,7 @@
  *   Ctrl+Alt+Q        quitter
  * Souris : 5 clics dans le coin haut-gauche d'un écran → menu.
  */
-const { app, BrowserWindow, screen, ipcMain, powerSaveBlocker, net } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, powerSaveBlocker, net, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -90,6 +90,8 @@ function buildWindows() {
         additionalArguments: ['--waf-screen=' + key, '--waf-num=' + (i + 1), '--waf-size=' + d.size.width + 'x' + d.size.height]
       }
     });
+    // Signature de l'appli (l'admin Monitoring affiche « PC Linux · appli x.y.z »)
+    win.webContents.setUserAgent(win.webContents.getUserAgent() + ' WAFSignageApp/linux-' + app.getVersion());
     w = { win, key, num: i + 1, mode: 'boot', clicks: 0, firstClick: 0 };
     wins.set(key, w);
     wire(w);
@@ -186,6 +188,9 @@ ipcMain.on('waf:sync', (e, fn, a, b) => {
     case 'autostartOk': r = autostartOk(); break;
     case 'isLauncher': r = true; break;
     case 'screenName': r = w ? 'Écran ' + w.num : ''; break;
+    case 'updateInfo': r = JSON.stringify({ current: app.getVersion(), latest: latest.version || '',
+                          newer: !!latest.version && cmpVer(latest.version, app.getVersion()) > 0,
+                          auto: 'installation automatique chaque nuit' }); break;
     case 'setScreen': if (w) { cfg.screens[w.key] = { slug: a || '', label: b || '' }; saveCfg(cfg); } break;
     case 'clearScreen': if (w) { delete cfg.screens[w.key]; saveCfg(cfg); } break;
   }
@@ -197,6 +202,13 @@ ipcMain.on('waf:do', (e, fn) => {
   else if (fn === 'pair') openPairing(w);
   else if (fn === 'restart') { w.win.webContents.session.clearCache().finally(() => openPlayer(w)); }
   else if (fn === 'openAutostart') { enableAutostart(); w.win.webContents.executeJavaScript('window.refreshChecks&&refreshChecks()').catch(() => {}); }
+  else if (fn === 'checkUpdate') {
+    fetchLatest().then(() => {
+      const newer = latest.version && cmpVer(latest.version, app.getVersion()) > 0;
+      const js = 'window.onUpdateState&&onUpdateState(' + JSON.stringify(newer ? 'linuxnight' : (latest.version ? 'uptodate' : 'none')) + ',' + JSON.stringify(newer ? latest.version : app.getVersion()) + ')';
+      if (!w.win.isDestroyed()) w.win.webContents.executeJavaScript(js).catch(() => {});
+    });
+  }
   else if (fn === 'openSettings') execFile('cinnamon-settings', [], (err) => { if (err) execFile('gnome-control-center', [], () => {}); });
 });
 // Requêtes HTTP par l'appli (pas de CORS / file://)
@@ -212,12 +224,42 @@ ipcMain.on('waf:http', async (e, id, url) => {
   if (!w.win.isDestroyed()) w.win.webContents.executeJavaScript('window.__http&&__http(' + JSON.stringify(id) + ',' + code + ',' + JSON.stringify(body) + ')').catch(() => {});
 });
 
+// ── Mises à jour ──
+// L'installation est faite chaque nuit par le minuteur système
+// waf-signage-update.timer (root, installé avec le .deb). L'appli se contente
+// de redémarrer quand la version installée a changé.
+let latest = {};
+function cmpVer(a, b) {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); }
+  return 0;
+}
+async function fetchLatest() {
+  try {
+    const r = await net.fetch(BASE + '/api/app-version.php?platform=linux');
+    const j = await r.json();
+    if (j && j.success) latest = j.data || {};
+  } catch (e) {}
+}
+function watchInstalledVersion() {
+  if (!app.isPackaged || !process.execPath.startsWith('/opt/')) return;   // seulement l'appli installée (.deb)
+  execFile('dpkg-query', ['-W', '-f=${Version}', 'waf-signage'], (err, out) => {
+    const v = String(out || '').trim();
+    if (!err && v && v !== app.getVersion()) { app.relaunch(); app.exit(0); }
+  });
+}
+
 // ── Lancement ──
 app.whenReady().then(() => {
+  // Signature de l'appli pour toute la session (y compris le service worker du player)
+  session.defaultSession.setUserAgent(session.defaultSession.getUserAgent() + ' WAFSignageApp/linux-' + app.getVersion());
   cfg = loadCfg();
   if (!cfg.autostartAsked) { enableAutostart(); cfg.autostartAsked = true; saveCfg(cfg); }
   keepAwake();
   buildWindows();
+  fetchLatest();
+  setInterval(fetchLatest, 6 * 3600 * 1000);
+  setInterval(watchInstalledVersion, 5 * 60 * 1000);
   let t = null;
   const rebuild = () => { clearTimeout(t); t = setTimeout(buildWindows, 1500); };
   screen.on('display-added', rebuild);

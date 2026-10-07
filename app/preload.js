@@ -22,7 +22,9 @@ contextBridge.exposeInMainWorld('WafApp', {
   openAutostart: () => d('openAutostart'),
   openLauncherSettings: () => {},
   openSettings: () => d('openSettings'),
-  http: (id, url) => ipcRenderer.send('waf:http', id, url)
+  http: (id, url) => ipcRenderer.send('waf:http', id, url),
+  updateInfo: () => s('updateInfo'),
+  checkUpdate: () => d('checkUpdate')
 });
 
 // Clics dans le coin haut-gauche (sur l'affichage) → menu

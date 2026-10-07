@@ -26,6 +26,12 @@ Si l'ancien kiosque (Chromium + `waf-kiosk.service`) est installé, le désactiv
 sudo systemctl disable --now waf-kiosk waf-screen1 waf-screen2 2>/dev/null
 ```
 
+## Mises à jour automatiques
+- Dans l'admin signage : **Réglages → Applis des écrans** → dépôt GitHub (ex. `ton-compte/waf-signage-linux`, dépôt **public**).
+- Le PC vérifie chaque nuit vers 3 h 30 (et 10 min après chaque démarrage), installe la nouvelle version
+  tout seul, et l'appli redémarre d'elle-même. Journal : `journalctl -u waf-signage-update`.
+- Forcer une vérification : `sudo systemctl start waf-signage-update`.
+
 ## Raccourcis
 - **F1** ou **Ctrl+M** : menu de l'écran (changer d'écran, recharger…)
 - **5 clics** dans le coin haut-gauche d'un écran : menu
