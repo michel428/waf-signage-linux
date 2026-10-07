@@ -1,0 +1,35 @@
+{
+  "name": "waf-signage",
+  "productName": "WAF Signage",
+  "version": "2.0.0",
+  "description": "WAF Signage — affichage des écrans du club (Linux)",
+  "author": "WAF Forme <contact@waf-forme.fr>",
+  "homepage": "https://signage.waf-forme.fr",
+  "license": "UNLICENSED",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --linux deb AppImage --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "fr.wafforme.signage",
+    "productName": "WAF Signage",
+    "artifactName": "waf-signage-${version}.${ext}",
+    "files": ["app/**/*", "package.json"],
+    "directories": { "buildResources": "build", "output": "dist" },
+    "linux": {
+      "target": ["deb", "AppImage"],
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "synopsis": "Affichage dynamique WAF Forme",
+      "maintainer": "WAF Forme <contact@waf-forme.fr>"
+    },
+    "deb": {
+      "depends": ["libnss3", "libgtk-3-0", "libxss1", "libasound2 | libasound2t64", "x11-xserver-utils"]
+    }
+  }
+}
