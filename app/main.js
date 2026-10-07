@@ -261,6 +261,13 @@ ipcMain.on('waf:do', (e, fn) => {
       if (n > 150) { clearInterval(timer); send('error', 'pas de réponse du service de mise à jour'); }
     }, 2000);
   }
+  // ── Commandes à distance (admin → Monitoring) ──
+  else if (fn === 'appRestart') { app.relaunch(); app.exit(0); }
+  else if (fn === 'reboot') {
+    // Le .deb installe waf-signage-reboot.path : écrire ce fichier redémarre le PC (root)
+    try { fs.writeFileSync('/var/lib/waf-signage/reboot', String(Date.now())); } catch (e) { app.relaunch(); app.exit(0); }
+  }
+  else if (fn === 'updateNow') { try { fs.writeFileSync('/var/lib/waf-signage/request', String(Date.now())); } catch (e) {} }
   else if (fn === 'openSettings') execFile('cinnamon-settings', [], (err) => { if (err) execFile('gnome-control-center', [], () => {}); });
 });
 // Requêtes HTTP par l'appli (pas de CORS / file://)

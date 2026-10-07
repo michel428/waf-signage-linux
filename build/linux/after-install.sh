@@ -67,7 +67,30 @@ Unit=waf-signage-update.service
 [Install]
 WantedBy=multi-user.target
 UNIT
+# Redémarrage du PC à distance (admin → Monitoring) : même principe
+cat > /etc/systemd/system/waf-signage-reboot.service <<'UNIT'
+[Unit]
+Description=Redémarrage du PC demandé depuis l'admin WAF Signage
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /var/lib/waf-signage/reboot
+ExecStart=/bin/systemctl reboot
+UNIT
+cat > /etc/systemd/system/waf-signage-reboot.path <<'UNIT'
+[Unit]
+Description=Redémarrage à distance WAF Signage
+
+[Path]
+PathExists=/var/lib/waf-signage/reboot
+Unit=waf-signage-reboot.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+rm -f /var/lib/waf-signage/reboot
 systemctl daemon-reload || true
 systemctl enable --now waf-signage-update.timer || true
 systemctl enable --now waf-signage-update.path || true
+systemctl enable --now waf-signage-reboot.path || true
 fi

@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('WafApp', {
   openSettings: () => d('openSettings'),
   http: (id, url) => ipcRenderer.send('waf:http', id, url),
   updateInfo: () => s('updateInfo'),
+  appRestart: () => d('appRestart'),
+  reboot: () => d('reboot'),
+  updateNow: () => d('updateNow'),
   checkUpdate: () => d('checkUpdate')
 });
 
