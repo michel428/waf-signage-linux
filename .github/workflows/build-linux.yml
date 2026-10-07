@@ -1,0 +1,48 @@
+name: Build Linux
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Trouver le projet
+        run: |
+          DIR=$(dirname "$(find . -name package.json -not -path '*/node_modules/*' | head -1)")
+          echo "Projet trouvé dans : $DIR"
+          echo "PROJ=$DIR" >> $GITHUB_ENV
+
+      - name: Construire (.deb + AppImage)
+        run: |
+          cd "$PROJ"
+          npm version "2.0.${{ github.run_number }}" --no-git-tag-version
+          npm install --no-audit --no-fund
+          npx electron-builder --linux deb AppImage --publish never
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp dist/*.deb "$GITHUB_WORKSPACE/out/waf-signage.deb"
+          cp dist/*.AppImage "$GITHUB_WORKSPACE/out/waf-signage.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: waf-signage-linux
+          path: out/*
+
+      - name: Publier (Releases)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: linux-v2.0.${{ github.run_number }}
+          name: WAF Signage Linux 2.0.${{ github.run_number }}
+          files: out/*
+          make_latest: true
