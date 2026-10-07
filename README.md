@@ -30,7 +30,13 @@ sudo systemctl disable --now waf-kiosk waf-screen1 waf-screen2 2>/dev/null
 - Dans l'admin signage : **Réglages → Applis des écrans** → dépôt GitHub (ex. `ton-compte/waf-signage-linux`, dépôt **public**).
 - Le PC vérifie chaque nuit vers 3 h 30 (et 10 min après chaque démarrage), installe la nouvelle version
   tout seul, et l'appli redémarre d'elle-même. Journal : `journalctl -u waf-signage-update`.
-- Forcer une vérification : `sudo systemctl start waf-signage-update`.
+- Forcer une vérification : menu de l'écran (**F1**) → **Rechercher une mise à jour** (installation immédiate),
+  ou `sudo systemctl start waf-signage-update`.
+
+## Veille
+Quand le club est fermé (Réglages → Horaires d'ouverture → mode veille), les écrans passent au noir
+et l'appli **coupe le signal vidéo** : les moniteurs se mettent en économie d'énergie, puis se rallument
+tout seuls à l'ouverture.
 
 ## Raccourcis
 - **F1** ou **Ctrl+M** : menu de l'écran (changer d'écran, recharger…)

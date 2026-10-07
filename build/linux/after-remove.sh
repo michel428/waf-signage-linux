@@ -9,7 +9,8 @@ fi
 
 # ── WAF : désinstallation complète (pas lors d'une mise à jour) ──
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-    systemctl disable --now waf-signage-update.timer 2>/dev/null || true
-    rm -f /etc/systemd/system/waf-signage-update.service /etc/systemd/system/waf-signage-update.timer /usr/local/sbin/waf-signage-update
+    systemctl disable --now waf-signage-update.timer waf-signage-update.path 2>/dev/null || true
+    rm -f /etc/systemd/system/waf-signage-update.service /etc/systemd/system/waf-signage-update.timer /etc/systemd/system/waf-signage-update.path /usr/local/sbin/waf-signage-update
+    rm -rf /var/lib/waf-signage
     systemctl daemon-reload 2>/dev/null || true
 fi

@@ -52,6 +52,22 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT
+# Bouton « Rechercher une mise à jour » du menu de l'appli : l'appli (non root)
+# écrit dans /var/lib/waf-signage/request → systemd lance la mise à jour (root).
+mkdir -p /var/lib/waf-signage
+chmod 1777 /var/lib/waf-signage
+cat > /etc/systemd/system/waf-signage-update.path <<'UNIT'
+[Unit]
+Description=Mise à jour WAF Signage à la demande (menu de l'appli)
+
+[Path]
+PathModified=/var/lib/waf-signage/request
+Unit=waf-signage-update.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
 systemctl daemon-reload || true
 systemctl enable --now waf-signage-update.timer || true
+systemctl enable --now waf-signage-update.path || true
 fi

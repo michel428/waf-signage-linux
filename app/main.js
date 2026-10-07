@@ -105,6 +105,8 @@ function buildWindows() {
 
 function loadBoot(w, hash) {
   w.mode = 'boot';
+  sleepState.set(w.key, false);
+  if (typeof applyScreenPower === 'function') setImmediate(applyScreenPower);
   w.win.loadFile(BOOT, { hash: (hash || '').replace(/^#/, '') });
 }
 function openPlayer(w) {
@@ -173,6 +175,30 @@ function byEvent(e) {
   return null;
 }
 
+// ── Veille réelle : quand TOUS les écrans sont en mode veille (club fermé),
+// on coupe le signal vidéo (DPMS) → les moniteurs passent en économie d'énergie.
+// Rallumage automatique dès qu'un écran sort de veille. ──
+const sleepState = new Map();
+let screensOff = false;
+function applyScreenPower() {
+  const all = [...wins.values()].filter(w => !w.win.isDestroyed());
+  const allSleeping = all.length > 0 && all.every(w => w.mode === 'player' && sleepState.get(w.key) === true);
+  if (allSleeping && !screensOff) {
+    screensOff = true;
+    execFile('xset', ['+dpms'], () => execFile('xset', ['dpms', 'force', 'off'], () => {}));
+  } else if (!allSleeping && screensOff) {
+    screensOff = false;
+    execFile('xset', ['dpms', 'force', 'on'], () => keepAwake());
+  }
+}
+ipcMain.on('waf:sleep', (e, sleeping) => {
+  const w = byEvent(e); if (!w) return;
+  sleepState.set(w.key, !!sleeping);
+  applyScreenPower();
+});
+// Certains écrans se rallument seuls : on ré-applique toutes les 10 min
+setInterval(() => { if (screensOff) execFile('xset', ['dpms', 'force', 'off'], () => {}); }, 10 * 60 * 1000);
+
 // ── Pont « WafApp » (même API que l'appli Android) ──
 ipcMain.on('waf:sync', (e, fn, a, b) => {
   const w = byEvent(e);
@@ -203,11 +229,37 @@ ipcMain.on('waf:do', (e, fn) => {
   else if (fn === 'restart') { w.win.webContents.session.clearCache().finally(() => openPlayer(w)); }
   else if (fn === 'openAutostart') { enableAutostart(); w.win.webContents.executeJavaScript('window.refreshChecks&&refreshChecks()').catch(() => {}); }
   else if (fn === 'checkUpdate') {
-    fetchLatest().then(() => {
-      const newer = latest.version && cmpVer(latest.version, app.getVersion()) > 0;
-      const js = 'window.onUpdateState&&onUpdateState(' + JSON.stringify(newer ? 'linuxnight' : (latest.version ? 'uptodate' : 'none')) + ',' + JSON.stringify(newer ? latest.version : app.getVersion()) + ')';
-      if (!w.win.isDestroyed()) w.win.webContents.executeJavaScript(js).catch(() => {});
-    });
+    // Le .deb installe un déclencheur systemd (waf-signage-update.path) : écrire
+    // ce fichier lance tout de suite la mise à jour en root ; l'avancement est lu
+    // dans /var/lib/waf-signage/status et affiché dans le menu.
+    const send = (state, detail) => { if (!w.win.isDestroyed()) w.win.webContents.executeJavaScript('window.onUpdateState&&onUpdateState(' + JSON.stringify(state) + ',' + JSON.stringify(detail || '') + ')').catch(() => {}); };
+    const t0 = Math.floor(Date.now() / 1000);
+    try {
+      fs.writeFileSync('/var/lib/waf-signage/request', String(Date.now()));
+    } catch (err) {
+      // Appli lancée hors .deb (test) : simple information
+      fetchLatest().then(() => {
+        const newer = latest.version && cmpVer(latest.version, app.getVersion()) > 0;
+        send(newer ? 'linuxnight' : (latest.version ? 'uptodate' : 'none'), newer ? latest.version : app.getVersion());
+      });
+      return;
+    }
+    send('check', '');
+    let n = 0;
+    const timer = setInterval(() => {
+      n++;
+      let st = '';
+      try { st = fs.readFileSync('/var/lib/waf-signage/status', 'utf8').trim(); } catch (e) {}
+      const parts = st.split('|');
+      if (+parts[0] >= t0 - 1 && parts[1]) {
+        send(parts[1], parts.slice(2).join('|'));
+        if (['uptodate', 'none', 'error', 'installed'].includes(parts[1])) {
+          clearInterval(timer);
+          if (parts[1] === 'installed') setTimeout(watchInstalledVersion, 3000);
+        }
+      }
+      if (n > 150) { clearInterval(timer); send('error', 'pas de réponse du service de mise à jour'); }
+    }, 2000);
   }
   else if (fn === 'openSettings') execFile('cinnamon-settings', [], (err) => { if (err) execFile('gnome-control-center', [], () => {}); });
 });
