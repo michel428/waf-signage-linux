@@ -27,7 +27,8 @@ contextBridge.exposeInMainWorld('WafApp', {
   appRestart: () => d('appRestart'),
   reboot: () => d('reboot'),
   updateNow: () => d('updateNow'),
-  checkUpdate: () => d('checkUpdate')
+  checkUpdate: () => d('checkUpdate'),
+  videoPrefetch: (url) => ipcRenderer.send('waf:prefetch', url)
 });
 
 // Clics dans le coin haut-gauche (sur l'affichage) → menu

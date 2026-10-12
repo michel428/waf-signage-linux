@@ -28,6 +28,30 @@ app.commandLine.appendSwitch('disable-features', 'Translate,MediaSessionService'
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('disable-pinch');
 
+// ── Vidéo : copie locale sur le disque (lecture instantanée, sans réseau) ──
+const videocache = require('./videocache');
+videocache.registerScheme();
+
+// ── Vidéo : décodage matériel (carte graphique Intel/AMD via VA-API) ──
+// Sans ça, Chromium décode les vidéos avec le processeur → saccades sur les
+// petits PC. Si la carte graphique plante 2 fois, on désactive tout seul
+// (config.json → "hwdecode": false) et l'appli redémarre en mode normal.
+let hwDecodeOff = false;
+try { hwDecodeOff = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'config.json'), 'utf8')).hwdecode === false; } catch (e) {}
+if (!hwDecodeOff) {
+  app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder,VaapiVideoDecodeLinuxGL,VaapiIgnoreDriverChecks,AcceleratedVideoDecodeLinuxGL,AcceleratedVideoDecodeLinuxZeroCopyGL');
+  app.commandLine.appendSwitch('enable-gpu-rasterization');
+  app.commandLine.appendSwitch('enable-zero-copy');
+}
+let gpuCrashes = 0;
+app.on('child-process-gone', (e, d) => {
+  if (d.type !== 'GPU' || hwDecodeOff) return;
+  if (++gpuCrashes >= 2) {
+    const c = loadCfg(); c.hwdecode = false; saveCfg(c);
+    app.relaunch(); app.exit(0);
+  }
+});
+
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 // ── Configuration (un écran WAF par sortie vidéo) ──
@@ -222,6 +246,9 @@ ipcMain.on('waf:sync', (e, fn, a, b) => {
   }
   e.returnValue = r;
 });
+// Copie locale anticipée des vidéos de la playlist (appelée par signage.js)
+ipcMain.on('waf:prefetch', (e, url) => { if (typeof url === 'string' && url.startsWith(BASE + '/')) videocache.prefetch(url); });
+
 ipcMain.on('waf:do', (e, fn) => {
   const w = byEvent(e); if (!w) return;
   if (fn === 'start') openPlayer(w);
@@ -312,6 +339,7 @@ function watchInstalledVersion() {
 app.whenReady().then(() => {
   // Signature de l'appli pour toute la session (y compris le service worker du player)
   session.defaultSession.setUserAgent(session.defaultSession.getUserAgent() + ' WAFSignageApp/linux-' + app.getVersion());
+  videocache.install(session.defaultSession, BASE);
   cfg = loadCfg();
   if (!cfg.autostartAsked) { enableAutostart(); cfg.autostartAsked = true; saveCfg(cfg); }
   keepAwake();
